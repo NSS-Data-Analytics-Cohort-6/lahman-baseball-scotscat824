@@ -68,11 +68,11 @@ ORDER BY totalsal DESC;*/
 /*SELECT 	grouped_pos, SUM(po)
 FROM (
 		SELECT *,
-			CASE WHEN pos LIKE UPPER('P%') OR pos LIKE UPPER('%C%')
+			CASE WHEN UPPER(pos) LIKE 'P%' OR UPPER(pos) LIKE '%C%'
             THEN 'Battery' 
-			WHEN pos LIKE UPPER('%1B%') OR pos LIKE UPPER('%2B%') OR pos LIKE UPPER('%3B%') OR pos LIKE UPPER('%SS%')
+			WHEN UPPER(pos) LIKE '%1B%' OR UPPER(pos) LIKE '%2B%' OR UPPER(pos) LIKE '%3B%' OR UPPER(pos) LIKE '%SS%'
 			THEN 'Infield'
-			WHEN pos LIKE UPPER('%OF%') OR pos LIKE UPPER('%LF%') OR pos LIKE UPPER('%CF%') OR pos LIKE UPPER('%RF%')
+			WHEN UPPER(pos) LIKE '%OF%' OR UPPER(pos) LIKE '%LF%' OR UPPER(pos) LIKE '%CF%' OR UPPER(pos) LIKE '%RF%'
 			THEN 'Outfield'
 			ELSE 'Utility'
 			END AS grouped_pos
@@ -225,6 +225,72 @@ LIMIT 5;*/
 
 --Q9: 9. Which managers have won the TSN Manager of the Year award in both the National League (NL)
 --and the American League (AL)? Give their full name and the teams that they were managing when they won the award.
+
+/*SELECT t.yearid, t.name AS ws_winner, t.w AS ws_reg_season_wins, max_wins AS max_reg_season_wins
+FROM teams AS t
+LEFT JOIN
+	(SELECT t.yearid, MAX(t.w) AS max_wins
+	FROM teams AS t
+	WHERE t.yearid >= 1970 AND t.yearid <= 2016
+	GROUP BY t.yearid
+	ORDER BY t.yearid) AS max_wins_sub
+ON t.yearid = max_wins_sub.yearid
+WHERE t.yearid >= 1970 AND t.yearid <= 2016 AND t.wswin = 'Y'
+GROUP BY t.yearid, t.name, t.w, max_wins
+ORDER BY t.yearid ) AS ws_max_wins_table) AS count_calc_sub*/
+
+/*SELECT 	COUNT(CASE WHEN ws_reg_season_wins = max_reg_season_wins
+			 THEN 1
+			 END) AS both_ws_and_max_wins,*/
+
+SELECT *
+FROM awardsmanagers
+WHERE awardsmanagers.playerid IN
+
+	(
+	SELECT playerid
+	FROM(
+		SELECT playerid, SUM(NL_awards) AS nl_sums, SUM(AL_awards) AS al_sums
+		FROM(
+
+			SELECT 	m.lgid,
+			m.yearid,
+			m.playerid,
+			m.awardid,
+			COUNT(CASE WHEN lgid = 'NL' THEN 1 END) AS NL_awards,
+			COUNT(CASE WHEN lgid = 'AL' THEN 1 END) AS AL_awards
+			FROM(
+
+				SELECT 	lgid, yearid, playerid, awardid
+				FROM awardsmanagers 
+				WHERE UPPER(awardid) LIKE '%TSN%' AND UPPER(lgid) <> 'ML'
+				GROUP BY lgid, yearid, playerid, awardid) AS m
+
+			GROUP BY m.lgid, m.yearid, m.playerid, m.awardid) AS m_sums
+
+		GROUP BY playerid) AS m_compare
+	WHERE nl_sums > 0 AND al_sums > 0)
+
+AND awardid LIKE '%TSN%'
+
+
+/*SELECT playerid, AL_winners.al_count AS No_AL_MoY, NL_winners.nl_count AS No_NL_MoY
+FROM(
+	--list of playerids that won manager of year in al
+	SELECT COUNT(awardid) AS al_count,
+	playerid
+	FROM awardsmanagers AS a
+	WHERE awardid LIKE UPPER('%TSN%') AND lgid = 'AL'
+	GROUP BY playerid) AS AL_winners
+LEFT JOIN
+	(SELECT COUNT(b.awardid) AS nl_count,
+	 b.playerid
+	 FROM awardsmanagers AS b
+	 WHERE awardid LIKE UPPER('%TSN%') AND lgid = 'NL'
+	 GROUP BY b.playerid) AS NL_winners
+ON AL_winners.playerid = NL_winners.playerid
+GROUP BY playerid, No_AL_MoY, No_NL_MoY
+ORDER BY AL_winners.al_count DESC*/
 
 
 
