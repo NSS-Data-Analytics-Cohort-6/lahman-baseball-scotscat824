@@ -226,74 +226,63 @@ LIMIT 5;*/
 --Q9: 9. Which managers have won the TSN Manager of the Year award in both the National League (NL)
 --and the American League (AL)? Give their full name and the teams that they were managing when they won the award.
 
-/*SELECT t.yearid, t.name AS ws_winner, t.w AS ws_reg_season_wins, max_wins AS max_reg_season_wins
-FROM teams AS t
-LEFT JOIN
-	(SELECT t.yearid, MAX(t.w) AS max_wins
-	FROM teams AS t
-	WHERE t.yearid >= 1970 AND t.yearid <= 2016
-	GROUP BY t.yearid
-	ORDER BY t.yearid) AS max_wins_sub
-ON t.yearid = max_wins_sub.yearid
-WHERE t.yearid >= 1970 AND t.yearid <= 2016 AND t.wswin = 'Y'
-GROUP BY t.yearid, t.name, t.w, max_wins
-ORDER BY t.yearid ) AS ws_max_wins_table) AS count_calc_sub*/
 
-/*SELECT 	COUNT(CASE WHEN ws_reg_season_wins = max_reg_season_wins
-			 THEN 1
-			 END) AS both_ws_and_max_wins,*/
+/*WITH manager_find (yearid, playerid, awardid, namefirst, namelast, lgid)
+AS
 
-SELECT *
-FROM awardsmanagers
-WHERE awardsmanagers.playerid IN
-
+(SELECT a.yearid, a.playerid, a.awardid, p.namefirst, p.namelast, a.lgid
+FROM awardsmanagers AS a
+LEFT JOIN people AS p
+ON p.playerid = a.playerid
+WHERE a.playerid IN
 	(
 	SELECT playerid
 	FROM(
 		SELECT playerid, SUM(NL_awards) AS nl_sums, SUM(AL_awards) AS al_sums
 		FROM(
 
-			SELECT 	m.lgid,
+			SELECT 	m.lgid, 
 			m.yearid,
 			m.playerid,
 			m.awardid,
 			COUNT(CASE WHEN lgid = 'NL' THEN 1 END) AS NL_awards,
 			COUNT(CASE WHEN lgid = 'AL' THEN 1 END) AS AL_awards
 			FROM(
-
 				SELECT 	lgid, yearid, playerid, awardid
 				FROM awardsmanagers 
 				WHERE UPPER(awardid) LIKE '%TSN%' AND UPPER(lgid) <> 'ML'
 				GROUP BY lgid, yearid, playerid, awardid) AS m
-
 			GROUP BY m.lgid, m.yearid, m.playerid, m.awardid) AS m_sums
-
 		GROUP BY playerid) AS m_compare
 	WHERE nl_sums > 0 AND al_sums > 0)
+AND awardid LIKE '%TSN%'),
 
-AND awardid LIKE '%TSN%'
+team_name (year, teamid, team_name, manager)
+AS
 
-
-/*SELECT playerid, AL_winners.al_count AS No_AL_MoY, NL_winners.nl_count AS No_NL_MoY
-FROM(
-	--list of playerids that won manager of year in al
-	SELECT COUNT(awardid) AS al_count,
-	playerid
-	FROM awardsmanagers AS a
-	WHERE awardid LIKE UPPER('%TSN%') AND lgid = 'AL'
-	GROUP BY playerid) AS AL_winners
-LEFT JOIN
-	(SELECT COUNT(b.awardid) AS nl_count,
-	 b.playerid
-	 FROM awardsmanagers AS b
-	 WHERE awardid LIKE UPPER('%TSN%') AND lgid = 'NL'
-	 GROUP BY b.playerid) AS NL_winners
-ON AL_winners.playerid = NL_winners.playerid
-GROUP BY playerid, No_AL_MoY, No_NL_MoY
-ORDER BY AL_winners.al_count DESC*/
+(select t.yearid, t.teamid, t.name, man.playerid
+from teams AS t
+left join managers AS man
+on man.yearid = t.yearid AND man.teamid = t.teamid
+where t.yearid > 1985
+group by t.yearid, t.teamid, t.name, man.playerid
+order by t.yearid, t.name)
 
 
+SELECT mf.yearid, mf.awardid, mf.namefirst, mf.namelast, mf.lgid, team_name.team_name
+FROM manager_find AS mf
+LEFT JOIN team_name
+ON mf.yearid = team_name.year AND mf.playerid = team_name.manager
+GROUP BY mf.yearid, mf.awardid, mf.namefirst, mf.namelast, mf.lgid, team_name.team_name*/
 
+---------------------------------------------------------------------------------------------------
 
+--Q10: Find all players who hit their career highest number of home runs in 2016. Consider only players
+--who have played in the league for at least 10 years, and who hit at least one home run in 2016. Report
+--the players' first and last names and the number of home runs they hit in 2016.
+
+SELECT min(DATE_PART('year', CAST(debut AS date))) AS min_year
+FROM people
+WHERE DATE_PART('year', CAST(finalgame AS date)) > 2015
 
 
