@@ -1,16 +1,44 @@
 --LAHMAN BASEBALL DATABASE
+------------------------------------------------------------------------------
+--query to find player any player info
+
+--get player name and player id
+/*WITH player_find (playerid, first, given, last)
+AS
+(SELECT playerid, namefirst, namegiven, namelast
+FROM people AS p),
+
+teamid_year (playerid, league, year, teamid, games)
+AS
+(SELECT playerid, lgid, yearid, teamid, g_all
+ FROM appearances AS app),
+
+team_name (teamname, teamid, yearid)
+AS
+(SELECT name, teamid, yearid
+ FROM teams AS t)
+ 
+SELECT teamid_year.year, teamid_year.games, team_name.teamname, player_find.playerid, player_find.first, player_find.given, player_find.last
+FROM player_find
+LEFT JOIN teamid_year
+ON teamid_year.playerid = player_find.playerid
+LEFT JOIN team_name
+ON team_name.teamid = teamid_year.teamid AND team_name.yearid = teamid_year.year
+--WHERE lower(player_find.first) like '%reggie%' AND lower(player_find.last) like '%jackson%'
+WHERE player_find.playerid like '%howarry%'*/
+
+----------------------------------------------------------------------------------
 --Q1: What range of years for baseball games played does the provided database cover?
-/*SELECT yearid
+/*SELECT 	min(yearid),
+			max(yearid)
 FROM appearances
-GROUP BY yearid
-ORDER BY yearid;
 -- A: 1871 - 2016*/
 
 --------------------------------------------------------------------------------------------
 
---Q2: Find the name and height of the shortest player in the database. How many games
+/*--Q2: Find the name and height of the shortest player in the database. How many games
 --did he play in? What is the name of the team for which he played
-/*SELECT 		namegiven,
+SELECT 		namegiven,
 			CONCAT('"',namefirst,'"'),
 			namelast,
 			CONCAT(CAST(FLOOR(height/12) AS numeric(3,0)), ' ft. ', MOD(CAST(height AS integer),12), ' in.') AS ft_in,
@@ -84,7 +112,9 @@ GROUP BY grouped_pos*/
 
 --Q5: Find the average number of strikeouts per game by decade since 1920. Round the numbers you report to 2 decimal places.
 --Do the same for home runs per game. Do you see any trends?
-/*SELECT decade, CAST(AVG(so_per_game) AS decimal(9,3)) AS average_so_per_game
+/*SELECT	decade,
+			CAST(AVG(so_per_game) AS decimal(9,3)) AS average_so_per_game,
+			CAST(AVG(hra_per_game) AS decimal(9,3)) AS average_hra_per_game
 FROM(
 	SELECT *,
 		CASE WHEN yearid > 1919 AND yearid < 1930
@@ -109,8 +139,9 @@ FROM(
 		THEN '2010s'
 		ELSE 'Before'
 		END AS decade,
-		CAST(so / CAST(g AS decimal(9,3)) AS decimal(9,3)) AS so_per_game
-	FROM pitching) AS decades_sub
+		CAST(COALESCE(so,0)  / CAST(g AS decimal(9,3)) AS decimal(7,3)) AS so_per_game,
+		CAST(COALESCE(hra,0) / CAST(g AS decimal(9,3)) AS decimal(7,3)) AS hra_per_game
+	FROM teams) AS decades_sub
 WHERE yearid > 1919 AND yearid < 2020
 GROUP BY decade
 ORDER BY decade;*/
@@ -226,7 +257,7 @@ LIMIT 5;*/
 --Q9: 9. Which managers have won the TSN Manager of the Year award in both the National League (NL)
 --and the American League (AL)? Give their full name and the teams that they were managing when they won the award.
 
-
+--manager CTE
 /*WITH manager_find (yearid, playerid, awardid, namefirst, namelast, lgid)
 AS
 
@@ -257,6 +288,7 @@ WHERE a.playerid IN
 	WHERE nl_sums > 0 AND al_sums > 0)
 AND awardid LIKE '%TSN%'),
 
+--team CTE
 team_name (year, teamid, team_name, manager)
 AS
 
@@ -281,8 +313,177 @@ GROUP BY mf.yearid, mf.awardid, mf.namefirst, mf.namelast, mf.lgid, team_name.te
 --who have played in the league for at least 10 years, and who hit at least one home run in 2016. Report
 --the players' first and last names and the number of home runs they hit in 2016.
 
-SELECT min(DATE_PART('year', CAST(debut AS date))) AS min_year
+WITH date_max_hr(playerid, year, max_car_hr)
+AS
+--subquery to find max career hr by year for all players playing since 2006
+(SELECT DISTINCT playerid, yearid, max(hr) AS max_car_hr
+FROM batting
+WHERE yearid > '2005'
+GROUP BY playerid, yearid
+ORDER BY max_car_hr DESC),
+
+--CTE to find 2016 hr for all players that had more than 1 hr
+hr_current (playerid, year, hr_curr)
+AS
+(SELECT DISTINCT playerid, yearid, hr
+FROM batting
+WHERE yearid = '2016' AND hr > 1
+limit 10),
+
+--CTE to find all players in 2016 that had a career hr season
+hr_career (playerid, current_year, hr_2016, max_hr_year, max_career_hr, career_year_2016)
+AS
+(SELECT hr_current.playerid,
+		hr_current.year AS current_year,
+		hr_current.hr_curr AS hr_2016,
+		date_max_hr.year AS max_hr_year,
+		date_max_hr.max_car_hr AS max_career_hr,
+		CASE	WHEN hr_current.hr_curr >= date_max_hr.max_car_hr
+				THEN 1
+				ELSE 0
+		END AS career_year_2016
+FROM hr_current
+LEFT JOIN date_max_hr
+ON hr_current.playerid = date_max_hr.playerid)
+
+SELECT p.namefirst, p.namegiven, p.namelast, hr_career.current_year, hr_career.hr_2016
+FROM hr_career
+LEFT JOIN people AS p
+ON hr_career.playerid = p.playerid
+WHERE hr_career.career_year_2016 =1
+ORDER BY hr_career.hr_2016 DESC
+
+
+ 	
+	--subq to find min career debut year for all players in league in 2016
+	/*(SELECT min(DATE_PART('year', CAST(debut AS date))) AS min_year
+	FROM people
+	WHERE DATE_PART('year', CAST(finalgame AS date)) > 2015)*/
+
+
+
+-- Taryn's Class Examples on Verification
+/*-- QUESTION 1. Total walks allowed by manager over the course of their career
+SELECT playerid, SUM(BBA) AS career_walks_allowed
+FROM managers
+LEFT JOIN teams
+USING(teamid)
+GROUP BY playerid
+ORDER BY playerid
+--The manager with the playerid actama99 has value of 211,053 for how many walks his teams allowed while he was managing them. That seems extremely high.
+
+--First let's look at 'actama99' in managers
+SELECT *
+FROM managers
+WHERE playerid = 'actama99'
+--He's in there 6 times because there's an entry for each year he managed. Is that important? 
+
+-- We see he managed WAS from 2007-2009 and then CLE from 2010-2012. Let's look at the BBA (walks allowed) with those filters in the teams table.
+SELECT * 
+FROM teams
+WHERE yearid BETWEEN 2007 AND 2009
+	AND teamid = 'WAS'
+OR yearid BETWEEN 2010 AND 2012
+	AND teamid = 'CLE'
+--6 entries makes sense (3 years * 2 teams)
+
+--Let's isolate BBA since those rows feel good.
+SELECT SUM(BBA)
+FROM teams
+WHERE yearid BETWEEN 2007 AND 2009
+	AND teamid = 'WAS'
+OR yearid BETWEEN 2010 AND 2012
+	AND teamid = 'CLE'
+--So since 'actama99' managed WAS from 2007 - 2009, then CLE from 2010-2012, it seems like our number should be 3,375 instead of 211,053. This number seems more reasonable. 
+
+--Let's look again at the managers table, but this time join teams onto it to see exactly what's happening without BBA numbers. You can select all, but to make it easier (and perhaps a lot faster depending on how many rows of data you have), you could select only the columns that are relevant to the issue. Keep in mind, we're suspicious of the yearid contributed by the managers table.
+SELECT playerid, teamid, managers.yearid, BBA
+FROM managers
+LEFT JOIN teams
+USING(teamid)
+WHERE playerid = 'actama99'
+-- A couple findings here: 1. Since we feel confident our actual BBA number is 3375, we don't have to calculate these 408 rows to guess that this output might be higher than that. 2. Years are showing up multiple times for other fields that are staying consistent - for example there are many rows where the teamid is 'WAS' and the yearid is '2009'
+
+--Since it seems like yearid in the managers table is probably the issue, let's try matching our join on the yearid key in addition to the teamid
+SELECT playerid, SUM(BBA) AS career_walks_allowed
+FROM managers
+LEFT JOIN teams
+USING(teamid, yearid)
+GROUP BY playerid
+ORDER BY playerid
+--Now actama99's BBA is 3375. If the number had been something else, we would have known to try another method.
+
+
+-- QUESTION 2. career homeruns of everyone who went to rice
+SELECT playerid, SUM(hr) AS career_homeruns
 FROM people
-WHERE DATE_PART('year', CAST(finalgame AS date)) > 2015
+LEFT JOIN collegeplaying
+USING(playerid)
+LEFT JOIN batting
+USING(playerid)
+WHERE schoolid = 'rice'
+GROUP BY playerid
+ORDER BY career_homeruns DESC;
+
+--The playerid 'berkmla01' is giving us a career homeruns number of 1098. Seems high, but how do we check? First, let's see what the batting table looks like. We can be pretty confident the following output will give us the right number for career homeruns because there is no join involved to give us duplicates.
+SELECT playerid, SUM(hr) AS career_homeruns
+FROM batting
+WHERE playerid = 'berkmla01'
+GROUP BY playerid
+
+--336. So which table is giving us trouble (or both)? Let's get a feel for our other tables. Since they all have playerid in them, we can filter for berkmla01 for both.
+SELECT *
+FROM people
+WHERE playerid = 'berkmla01'
+--Just one row in people (makes sense); probably not affecting our output
+
+--What about collegeplaying?
+SELECT *
+FROM collegeplaying
+WHERE playerid = 'berkmla01'
+--collegeplaying has a row for each year the player attended college there. Since the years someone went to school have nothing to do with their batting average, we have no use for this column. You can deal with this selection using a subquery.
+
+--Here are two ways to go about it:
+
+--1. Subquery in your WHERE: take out the JOIN to collegeplaying entirely and recreate your WHERE to indicate you only want playerids from a subquery where schoolid = 'rice'. Now it's not pulling in any information about years in the collegeplaying table, it's only grabbing the ids we're interested in
+SELECT playerid, SUM(hr) AS career_homeruns
+FROM people
+-- LEFT JOIN collegeplaying
+-- USING(playerid)
+LEFT JOIN batting
+USING(playerid)
+--WHERE schoolid = 'rice'
+WHERE playerid IN (SELECT playerid
+					FROM collegeplaying
+					WHERE schoolid = 'rice')
+GROUP BY playerid
+ORDER BY career_homeruns DESC;
+
+
+--2. Subquery in your FROM (or CTE you join to): We only brought the collegetable table in to link playerid to schoolid, so in this case we can pick any of these rows at random. In this case, we're going to use MAX() since either MAX() or MIN() will give us exactly one row without combining anything together.
+SELECT playerid, SUM(hr) AS career_homeruns
+FROM people
+--Selecting schoolid in our subquery because we reference it in the WHERE to filter for 'rice'. We select playerid because we need it to join to the other tables. Finally, MAX(yearid) comes in so we are only selecting one row from the collegeplaying table.
+LEFT JOIN (SELECT schoolid, playerid, MAX(yearid)
+		   FROM collegeplaying
+		   GROUP BY schoolid, playerid) as subq
+USING(playerid)
+LEFT JOIN batting
+USING(playerid)
+WHERE schoolid = 'rice'
+GROUP BY playerid
+ORDER BY career_homeruns DESC;
+--If you use this method, make sure you have a good understanding of exactly what is happening in your tables.
+
+--Why do we use a subquery to fix this issue, but JOIN on multiple keys to fix our first issue?*/
+
+
+
+
+
+
+
+
+
 
 
